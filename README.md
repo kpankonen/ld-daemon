@@ -17,4 +17,4 @@ Quick setup
 
 3. Run `ldd`.
 
-4. Set `stream` and `use_ldd` to `true` in your application's LaunchDarkly SDK configuration. Also ensure that you're using a Redis store. This will turn off your SDK's streaming connection, but read feature flags from the Redis store. 
+4. Set `stream` and `use_ldd` to `true` in your application's LaunchDarkly SDK configuration. Also ensure that you specify a Redis store in your configuration. This will turn off your SDK's streaming connection, but read feature flags from the Redis store. 

@@ -15,8 +15,9 @@ type Config struct {
 		Port int
 	}
 	Main struct {
-		ApiKey string
-		Prefix string
+		ApiKey      string
+		Prefix      string
+		ExitOnError bool
 	}
 }
 
@@ -48,19 +49,27 @@ func main() {
 		}
 	}()
 
-	select {
-	case <-init:
-		fmt.Println("Initialized stream")
-	case <-time.After(time.Second * 10):
-		fmt.Println("Timed out connecting to stream")
-		os.Exit(1)
+loop:
+	for {
+		select {
+		case <-init:
+			fmt.Println("Initialized stream")
+			break loop
+		case <-time.After(time.Second * 10):
+			fmt.Println("Timed out connecting to stream")
+			if c.Main.ExitOnError {
+				os.Exit(1)
+			}
+		}
 	}
 
 	for {
 		time.Sleep(time.Second)
 		if client.IsStreamDisconnected() {
-			fmt.Println("Stream connection lost, exiting")
-			os.Exit(1)
+			fmt.Println("Stream connection lost")
+			if c.Main.ExitOnError {
+				os.Exit(1)
+			}
 		}
 	}
 
