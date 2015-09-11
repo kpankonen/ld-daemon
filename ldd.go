@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+var VERSION = "DEV"
+
 type Config struct {
 	Redis struct {
 		Host string
@@ -25,6 +27,9 @@ var client ld.LDClient
 
 func main() {
 	var c Config
+
+	fmt.Println("Starting ldd version " + VERSION)
+
 	err := gcfg.ReadFileInto(&c, "ldd.conf")
 
 	if err != nil {

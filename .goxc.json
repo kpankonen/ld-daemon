@@ -1,0 +1,13 @@
+{
+	"ArtifactsDest": "./pkg",
+	"Tasks": [
+		"xc",
+		"archive-tar-gz"
+	],
+  "BuildConstraints": "linux,amd64",
+	"ResourcesInclude": "ldd.conf",
+	"ConfigVersion": "0.9",
+	"Env": [
+		"GOPATH={{.Env.PWD}}{{.PS}}Godeps{{.PS}}_workspace{{.PLS}}{{.Env.GOPATH}}"
+	]
+}
