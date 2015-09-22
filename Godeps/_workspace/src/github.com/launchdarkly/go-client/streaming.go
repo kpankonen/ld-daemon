@@ -11,13 +11,13 @@ import (
 	"time"
 )
 
-var (
-	PUT_FEATURE    = "put/features"
-	PATCH_FEATURE  = "patch/features"
-	DELETE_FEATURE = "delete/features"
+const (
+	putEvent    = "put"
+	patchEvent  = "patch"
+	deleteEvent = "delete"
 )
 
-type StreamProcessor struct {
+type streamProcessor struct {
 	store        FeatureStore
 	stream       *es.Stream
 	config       Config
@@ -26,30 +26,21 @@ type StreamProcessor struct {
 	sync.RWMutex
 }
 
-type FeatureStore interface {
-	Get(key string) (*Feature, error)
-	All() (map[string]*Feature, error)
-	Init(map[string]*Feature) error
-	Delete(key string, version int) error
-	Upsert(key string, f Feature) error
-	Initialized() bool
-}
-
-type FeaturePatchData struct {
+type featurePatchData struct {
 	Path string  `json:"path"`
 	Data Feature `json:"data"`
 }
 
-type FeatureDeleteData struct {
+type featureDeleteData struct {
 	Path    string `json:"path"`
 	Version int    `json:"version"`
 }
 
-func (sp *StreamProcessor) Initialized() bool {
+func (sp *streamProcessor) Initialized() bool {
 	return sp.store.Initialized()
 }
 
-func (sp *StreamProcessor) GetFeature(key string) (*Feature, error) {
+func (sp *streamProcessor) GetFeature(key string) (*Feature, error) {
 	if !sp.store.Initialized() {
 		return nil, errors.New("Requested stream data before initialization completed")
 	} else {
@@ -57,7 +48,56 @@ func (sp *StreamProcessor) GetFeature(key string) (*Feature, error) {
 	}
 }
 
-func newStream(apiKey string, config Config) *StreamProcessor {
+func (sp *streamProcessor) ShouldFallbackUpdate() bool {
+	sp.RLock()
+	defer sp.RUnlock()
+	return sp.disconnected != nil && sp.disconnected.Before(time.Now().Add(-2*time.Minute))
+}
+
+func (sp *streamProcessor) Start() {
+	for {
+		subscribed := sp.checkSubscribe()
+		if !subscribed {
+			sp.setDisconnected()
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		event := <-sp.stream.Events
+		switch event.Event() {
+		case putEvent:
+			var features map[string]*Feature
+			if err := json.Unmarshal([]byte(event.Data()), &features); err != nil {
+				sp.config.Logger.Printf("Unexpected error unmarshalling feature json: %+v", err)
+			} else {
+				sp.store.Init(features)
+				sp.setConnected()
+			}
+		case patchEvent:
+			var patch featurePatchData
+			if err := json.Unmarshal([]byte(event.Data()), &patch); err != nil {
+				sp.config.Logger.Printf("Unexpected error unmarshalling feature patch json: %+v", err)
+			} else {
+				key := strings.TrimLeft(patch.Path, "/")
+				sp.store.Upsert(key, patch.Data)
+				sp.setConnected()
+			}
+		case deleteEvent:
+			var data featureDeleteData
+			if err := json.Unmarshal([]byte(event.Data()), &data); err != nil {
+				sp.config.Logger.Printf("Unexpected error unmarshalling feature delete json: %+v", err)
+			} else {
+				key := strings.TrimLeft(data.Path, "/")
+				sp.store.Delete(key, data.Version)
+				sp.setConnected()
+			}
+		default:
+			sp.config.Logger.Printf("Unexpected event found in stream: %s", event.Event())
+			sp.setConnected()
+		}
+	}
+}
+
+func newStream(apiKey string, config Config) *streamProcessor {
 	var store FeatureStore
 
 	if config.FeatureStore != nil {
@@ -66,20 +106,22 @@ func newStream(apiKey string, config Config) *StreamProcessor {
 		store = NewInMemoryFeatureStore()
 	}
 
-	sp := &StreamProcessor{
+	sp := &streamProcessor{
 		store:  store,
 		config: config,
 		apiKey: apiKey,
 	}
 
-	go sp.Start()
+	if !config.UseLdd {
+		go sp.Start()
 
-	go sp.Errors()
+		go sp.errors()
+	}
 
 	return sp
 }
 
-func (sp *StreamProcessor) subscribe() {
+func (sp *streamProcessor) subscribe() {
 	sp.Lock()
 	defer sp.Unlock()
 
@@ -89,7 +131,7 @@ func (sp *StreamProcessor) subscribe() {
 		headers.Add("Authorization", "api_key "+sp.apiKey)
 		headers.Add("User-Agent", "GoClient/"+Version)
 
-		if stream, err := es.Subscribe(sp.config.StreamUri+"/", headers, ""); err != nil {
+		if stream, err := es.Subscribe(sp.config.StreamUri+"/features", headers, ""); err != nil {
 			sp.config.Logger.Printf("Error subscribing to stream: %+v", err)
 		} else {
 			sp.stream = stream
@@ -97,7 +139,7 @@ func (sp *StreamProcessor) subscribe() {
 	}
 }
 
-func (sp *StreamProcessor) checkSubscribe() bool {
+func (sp *streamProcessor) checkSubscribe() bool {
 	sp.RLock()
 	if sp.stream == nil {
 		sp.RUnlock()
@@ -109,7 +151,7 @@ func (sp *StreamProcessor) checkSubscribe() bool {
 	}
 }
 
-func (sp *StreamProcessor) Errors() {
+func (sp *streamProcessor) errors() {
 	for {
 		subscribed := sp.checkSubscribe()
 		if !subscribed {
@@ -128,7 +170,7 @@ func (sp *StreamProcessor) Errors() {
 	}
 }
 
-func (sp *StreamProcessor) setConnected() {
+func (sp *streamProcessor) setConnected() {
 	sp.RLock()
 	if sp.disconnected != nil {
 		sp.RUnlock()
@@ -143,7 +185,7 @@ func (sp *StreamProcessor) setConnected() {
 
 }
 
-func (sp *StreamProcessor) setDisconnected() {
+func (sp *streamProcessor) setDisconnected() {
 	sp.RLock()
 	if sp.disconnected == nil {
 		sp.RUnlock()
@@ -156,137 +198,4 @@ func (sp *StreamProcessor) setDisconnected() {
 	} else {
 		sp.RUnlock()
 	}
-}
-
-func (sp *StreamProcessor) ShouldFallbackUpdate() bool {
-	sp.RLock()
-	defer sp.RUnlock()
-	return sp.disconnected != nil && sp.disconnected.Before(time.Now().Add(-2*time.Minute))
-}
-
-func (sp *StreamProcessor) Start() {
-	for {
-		subscribed := sp.checkSubscribe()
-		if !subscribed {
-			sp.setDisconnected()
-			time.Sleep(2 * time.Second)
-			continue
-		}
-		event := <-sp.stream.Events
-		switch event.Event() {
-		case PUT_FEATURE:
-			var features map[string]*Feature
-			if err := json.Unmarshal([]byte(event.Data()), &features); err != nil {
-				sp.config.Logger.Printf("Unexpected error unmarshalling feature json: %+v", err)
-			} else {
-				sp.store.Init(features)
-				sp.setConnected()
-			}
-		case PATCH_FEATURE:
-			var patch FeaturePatchData
-			if err := json.Unmarshal([]byte(event.Data()), &patch); err != nil {
-				sp.config.Logger.Printf("Unexpected error unmarshalling feature patch json: %+v", err)
-			} else {
-				key := strings.TrimLeft(patch.Path, "/")
-				sp.store.Upsert(key, patch.Data)
-				sp.setConnected()
-			}
-		case DELETE_FEATURE:
-			var data FeatureDeleteData
-			if err := json.Unmarshal([]byte(event.Data()), &data); err != nil {
-				sp.config.Logger.Printf("Unexpected error unmarshalling feature delete json: %+v", err)
-			} else {
-				key := strings.TrimLeft(data.Path, "/")
-				sp.store.Delete(key, data.Version)
-				sp.setConnected()
-			}
-		default:
-			sp.config.Logger.Printf("Unexpected event found in stream: %s", event.Event())
-			sp.setConnected()
-		}
-	}
-}
-
-// A memory based FeatureStore implementation
-type InMemoryFeatureStore struct {
-	features      map[string]*Feature
-	isInitialized bool
-	sync.RWMutex
-}
-
-func NewInMemoryFeatureStore() *InMemoryFeatureStore {
-	return &InMemoryFeatureStore{
-		features:      make(map[string]*Feature),
-		isInitialized: false,
-	}
-}
-
-func (store *InMemoryFeatureStore) Get(key string) (*Feature, error) {
-	store.RLock()
-	defer store.RUnlock()
-	f := store.features[key]
-
-	if f == nil || f.Deleted {
-		return nil, nil
-	} else {
-		return f, nil
-	}
-}
-
-func (store *InMemoryFeatureStore) All() (map[string]*Feature, error) {
-	store.RLock()
-	defer store.RUnlock()
-	fs := make(map[string]*Feature)
-
-	for k, v := range store.features {
-		if !v.Deleted {
-			fs[k] = v
-		}
-	}
-	return fs, nil
-}
-
-func (store *InMemoryFeatureStore) Delete(key string, version int) error {
-	store.Lock()
-	defer store.Unlock()
-	f := store.features[key]
-	if f != nil && f.Version < version {
-		f.Deleted = true
-		f.Version = version
-		store.features[key] = f
-	} else if f == nil {
-		f = &Feature{Deleted: true, Version: version}
-		store.features[key] = f
-	}
-	return nil
-}
-
-func (store *InMemoryFeatureStore) Init(fs map[string]*Feature) error {
-	store.Lock()
-	defer store.Unlock()
-
-	store.features = make(map[string]*Feature)
-
-	for k, v := range fs {
-		store.features[k] = v
-	}
-	store.isInitialized = true
-	return nil
-}
-
-func (store *InMemoryFeatureStore) Upsert(key string, f Feature) error {
-	store.Lock()
-	defer store.Unlock()
-	old := store.features[key]
-
-	if old == nil || old.Version < f.Version {
-		store.features[key] = &f
-	}
-	return nil
-}
-
-func (store *InMemoryFeatureStore) Initialized() bool {
-	store.RLock()
-	defer store.RUnlock()
-	return store.isInitialized
 }

@@ -1,86 +1,34 @@
 package ldclient
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"github.com/facebookgo/httpcontrol"
 	"github.com/gregjones/httpcache"
-	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
 )
 
-const (
-	long_scale = float32(0xFFFFFFFFFFFFFFF)
-)
+const Version string = "0.0.3"
 
-var Version string = "0.0.3"
-
-type User struct {
-	Key       *string                      `json:"key,omitempty" bson:"key,omitempty"`
-	Secondary *string                      `json:"secondary,omitempty" bson:"secondary,omitempty"`
-	Ip        *string                      `json:"ip,omitempty" bson:"ip,omitempty"`
-	Country   *string                      `json:"country,omitempty" bson:"country,omitempty"`
-	Email     *string                      `json:"email,omitempty" bson:"email,omitempty"`
-	FirstName *string                      `json:"firstName,omitempty" bson:"firstName,omitempty"`
-	LastName  *string                      `json:"lastName,omitempty" bson:"lastName,omitempty"`
-	Avatar    *string                      `json:"avatar,omitempty" bson:"avatar,omitempty"`
-	Name      *string                      `json:"name,omitempty" bson:"name,omitempty"`
-	Anonymous *bool                        `json:"anonymous,omitempty" bson:"anonymous,omitempty"`
-	Custom    *map[string]interface{}      `json:"custom,omitempty" bson:"custom,omitempty"`
-	Derived   map[string]*DerivedAttribute `json:"derived,omitempty" bson:"derived,omitempty"`
-}
-
-type DerivedAttribute struct {
-	Value       interface{} `json:"value" bson:"value"`
-	LastDerived time.Time   `json:"lastDerived" bson:"lastDerived"`
-}
-
-type Operator string
-
-type Feature struct {
-	Name         *string      `json:"name"`
-	Key          *string      `json:"key"`
-	Kind         *string      `json:"kind"`
-	Salt         *string      `json:"salt"`
-	On           *bool        `json:"on"`
-	Variations   *[]Variation `json:"variations"`
-	CommitDate   *time.Time   `json:"commitDate"`
-	CreationDate *time.Time   `json:"creationDate"`
-	Version      int          `json:"version,omitempty"`
-	Deleted      bool         `json:"deleted,omitempty"`
-}
-
-type TargetRule struct {
-	Attribute string        `json:"attribute"`
-	Op        Operator      `json:"op"`
-	Values    []interface{} `json:"values"`
-}
-
-type Variation struct {
-	Value      interface{}  `json:"value"`
-	Weight     int          `json:"weight"`
-	Targets    []TargetRule `json:"targets"`
-	UserTarget *TargetRule  `json:"userTarget,omitempty"`
-}
-
+// The LaunchDarkly client. Client instances are thread-safe.
+// Applications should instantiate a single instance for the lifetime
+// of their application.
 type LDClient struct {
 	apiKey          string
 	config          Config
 	httpClient      *http.Client
 	eventProcessor  *eventProcessor
 	offline         bool
-	streamProcessor *StreamProcessor
+	streamProcessor *streamProcessor
 }
 
+// Exposes advanced configuration options for the LaunchDarkly client.
 type Config struct {
 	BaseUri       string
 	StreamUri     string
@@ -90,8 +38,14 @@ type Config struct {
 	Timeout       time.Duration
 	Stream        bool
 	FeatureStore  FeatureStore
+	UseLdd        bool
 }
 
+// Provides the default configuration options for the LaunchDarkly client.
+// The easiest way to create a custom configuration is to start with the
+// default config, and set the custom options from there. For example:
+//   var config = DefaultConfig
+//   config.Capacity = 2000
 var DefaultConfig = Config{
 	BaseUri:       "https://app.launchdarkly.com",
 	StreamUri:     "https://stream.launchdarkly.com",
@@ -101,10 +55,19 @@ var DefaultConfig = Config{
 	Timeout:       3000 * time.Millisecond,
 	Stream:        false,
 	FeatureStore:  nil,
+	UseLdd:        false,
 }
 
+// Creates a new client instance that connects to LaunchDarkly with the default configuration. In most
+// cases, you should use this method to instantiate your client.
+func MakeClient(apiKey string) *LDClient {
+	res := MakeCustomClient(apiKey, DefaultConfig)
+	return &res
+}
+
+// Creates a new client instance that connects to LaunchDarkly with a custom configuration.
 func MakeCustomClient(apiKey string, config Config) LDClient {
-	var streamProcessor *StreamProcessor
+	var streamProcessor *streamProcessor
 
 	config.BaseUri = strings.TrimRight(config.BaseUri, "/")
 
@@ -137,188 +100,6 @@ func MakeCustomClient(apiKey string, config Config) LDClient {
 	}
 }
 
-func MakeClient(apiKey string) *LDClient {
-	res := MakeCustomClient(apiKey, DefaultConfig)
-	return &res
-}
-
-func (b Feature) paramForId(user User) (float32, bool) {
-	var idHash string
-
-	if user.Key != nil {
-		idHash = *user.Key
-	} else { // without a key, this rule should pass
-		return 0, true
-	}
-
-	if user.Secondary != nil {
-		idHash = idHash + "." + *user.Secondary
-	}
-
-	h := sha1.New()
-	io.WriteString(h, *b.Key+"."+*b.Salt+"."+idHash)
-	hash := hex.EncodeToString(h.Sum(nil))[:15]
-
-	intVal, _ := strconv.ParseInt(hash, 16, 64)
-
-	param := float32(intVal) / long_scale
-
-	return param, false
-}
-
-func matchCustom(target TargetRule, user User) bool {
-	if user.Custom == nil {
-		return false
-	}
-	var v interface{} = (*user.Custom)[target.Attribute]
-
-	if v == nil {
-		return false
-	}
-
-	val := reflect.ValueOf(v)
-
-	if val.Kind() == reflect.Array || val.Kind() == reflect.Slice {
-		for i := 0; i < val.Len(); i++ {
-			if compareValues(val.Index(i).Interface(), target.Values) {
-				return true
-			}
-		}
-		return false
-	} else {
-		return compareValues(v, target.Values)
-	}
-}
-
-func compareValues(value interface{}, values []interface{}) bool {
-	if value == "" {
-		return false
-	} else {
-		for _, v := range values {
-			if value == v {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func (target TargetRule) matchTarget(user User) bool {
-	var uValue interface{}
-	if target.Attribute == "key" {
-		if user.Key != nil {
-			uValue = *user.Key
-		}
-	} else if target.Attribute == "ip" {
-		if user.Ip != nil {
-			uValue = *user.Ip
-		}
-	} else if target.Attribute == "country" {
-		if user.Country != nil {
-			uValue = *user.Country
-		}
-	} else if target.Attribute == "email" {
-		if user.Email != nil {
-			uValue = *user.Email
-		}
-	} else if target.Attribute == "firstName" {
-		if user.FirstName != nil {
-			uValue = *user.FirstName
-		}
-	} else if target.Attribute == "lastName" {
-		if user.LastName != nil {
-			uValue = *user.LastName
-		}
-	} else if target.Attribute == "avatar" {
-		if user.Avatar != nil {
-			uValue = *user.Avatar
-		}
-	} else if target.Attribute == "name" {
-		if user.Name != nil {
-			uValue = *user.Name
-		}
-	} else if target.Attribute == "anonymous" {
-		if user.Anonymous != nil {
-			uValue = *user.Anonymous
-		}
-	} else {
-		if matchCustom(target, user) {
-			return true
-		} else {
-			return false
-		}
-	}
-
-	if compareValues(uValue, target.Values) {
-		return true
-	} else {
-		return false
-	}
-}
-
-func (variation Variation) matchTarget(user User) *TargetRule {
-	for _, target := range variation.Targets {
-		if variation.UserTarget != nil && target.Attribute == "key" {
-			continue
-		}
-		if target.matchTarget(user) {
-			return &target
-		}
-	}
-	return nil
-}
-
-func (variation Variation) matchUser(user User) *TargetRule {
-	if variation.UserTarget != nil && variation.UserTarget.matchTarget(user) {
-		return variation.UserTarget
-	}
-	return nil
-}
-
-func (f Feature) Evaluate(user User) (value interface{}, rulesPassed bool) {
-	value, _, rulesPassed = f.EvaluateExplain(user)
-	return
-}
-
-func (f Feature) EvaluateExplain(user User) (value interface{}, targetMatch *TargetRule, rulesPassed bool) {
-
-	if !*f.On {
-		return nil, nil, true
-	}
-
-	param, passErr := f.paramForId(user)
-
-	if passErr {
-		return nil, nil, true
-	}
-
-	for _, variation := range *f.Variations {
-		target := variation.matchUser(user)
-		if target != nil {
-			return variation.Value, target, false
-		}
-	}
-
-	for _, variation := range *f.Variations {
-		target := variation.matchTarget(user)
-		if target != nil {
-			return variation.Value, target, false
-		}
-
-	}
-
-	var sum float32 = 0.0
-
-	for _, variation := range *f.Variations {
-		sum += float32(variation.Weight) / 100.0
-		if param < sum {
-			return variation.Value, nil, false
-		}
-	}
-
-	return nil, nil, true
-}
-
 func (client *LDClient) Identify(user User) error {
 	if client.offline {
 		return nil
@@ -327,6 +108,8 @@ func (client *LDClient) Identify(user User) error {
 	return client.eventProcessor.sendEvent(evt)
 }
 
+// Tracks that a user has performed an event. Custom data can be attached to the
+// event, and is serialized to JSON using the encoding/json package (http://golang.org/pkg/encoding/json/).
 func (client *LDClient) Track(key string, user User, data interface{}) error {
 	if client.offline {
 		return nil
@@ -335,44 +118,117 @@ func (client *LDClient) Track(key string, user User, data interface{}) error {
 	return client.eventProcessor.sendEvent(evt)
 }
 
+// Puts the LaunchDarkly client in offline mode. In offline mode, no network calls will be made,
+// and no events will be recorded. In addition, all calls to Toggle will return the default value.
+func (client *LDClient) SetOffline() {
+	client.offline = true
+}
+
+// Puts the LaunchDarkly client in online mode.
+func (client *LDClient) SetOnline() {
+	client.offline = false
+}
+
+// Returns whether the LaunchDarkly client is in offline mode.
+func (client *LDClient) IsOffline() bool {
+	return client.offline
+}
+
+// Returns false if the LaunchDarkly client does not have an active connection to
+// the LaunchDarkly streaming endpoint. If streaming mode is disabled in the client
+// configuration, this will always return false.
+func (client *LDClient) IsStreamDisconnected() bool {
+	return client.config.Stream == false || client.streamProcessor == nil || client.streamProcessor.ShouldFallbackUpdate()
+}
+
+// Returns whether the LaunchDarkly client has received an initial response from
+// the LaunchDarkly streaming endpoint. If this is the case, the client can service
+// Toggle calls from the stream. If streaming mode is disabled in the client
+// configuration, this will always return false.
+func (client *LDClient) IsStreamInitialized() bool {
+	return client.config.Stream && client.streamProcessor != nil && client.streamProcessor.Initialized()
+}
+
+// Stops the LaunchDarkly client from sending any additional events.
+func (client *LDClient) Close() {
+	client.eventProcessor.close()
+}
+
+// Immediately flushes queued events.
+func (client *LDClient) Flush() {
+	client.eventProcessor.flush()
+}
+
+// Returns the value of a boolean feature flag for a given user. Returns defaultVal if
+// there is an error, if the flag doesn't exist, or the feature is turned off.
+func (client *LDClient) Toggle(key string, user User, defaultVal bool) (bool, error) {
+	value, err := client.evaluate(key, user, defaultVal)
+
+	if err != nil {
+		client.sendFlagRequestEvent(key, user, defaultVal)
+		return defaultVal, err
+	}
+
+	result, ok := value.(bool)
+
+	if !ok {
+		client.sendFlagRequestEvent(key, user, defaultVal)
+		return defaultVal, errors.New("Feature flag returned non-bool value")
+	}
+
+	client.sendFlagRequestEvent(key, user, value)
+	return result, nil
+}
+
+// Returns the value of a feature flag (whose variations are integers) for the given user.
+// Returns defaultVal if there is an error, if the flag doesn't exist, or the feature is turned off.
+func (client *LDClient) IntVariation(key string, user User, defaultVal int) (int, error) {
+	value, err := client.evaluate(key, user, float64(defaultVal))
+
+	if err != nil {
+		client.sendFlagRequestEvent(key, user, defaultVal)
+		return defaultVal, err
+	}
+
+	// json numbers are deserialized into float64s
+	result, ok := value.(float64)
+
+	if !ok {
+		client.sendFlagRequestEvent(key, user, defaultVal)
+		return defaultVal, errors.New("Feature flag returned non-numeric value")
+	}
+
+	client.sendFlagRequestEvent(key, user, value)
+	return int(result), nil
+}
+
+// Returns the value of a feature flag (whose variations are floats) for the given user.
+// Returns defaultVal if there is an error, if the flag doesn't exist, or the feature is turned off.
+func (client *LDClient) Float64Variation(key string, user User, defaultVal float64) (float64, error) {
+	value, err := client.evaluate(key, user, defaultVal)
+
+	if err != nil {
+		client.sendFlagRequestEvent(key, user, defaultVal)
+		return defaultVal, err
+	}
+
+	result, ok := value.(float64)
+
+	if !ok {
+		client.sendFlagRequestEvent(key, user, defaultVal)
+		return defaultVal, errors.New("Feature flag returned non-numeric value")
+	}
+
+	client.sendFlagRequestEvent(key, user, value)
+	return result, nil
+}
+
 func (client *LDClient) sendFlagRequestEvent(key string, user User, value interface{}) error {
 	if client.offline {
 		return nil
 	}
 	evt := NewFeatureRequestEvent(key, user, value)
 	return client.eventProcessor.sendEvent(evt)
-}
-
-func (client *LDClient) SetOffline() {
-	client.offline = true
-}
-
-func (client *LDClient) SetOnline() {
-	client.offline = false
-}
-
-func (client *LDClient) IsOffline() bool {
-	return client.offline
-}
-
-func (client *LDClient) IsStreamDisconnected() bool {
-	return client.config.Stream == false || client.streamProcessor == nil || client.streamProcessor.ShouldFallbackUpdate()
-}
-
-func (client *LDClient) IsStreamInitialized() bool {
-	return client.config.Stream && client.streamProcessor != nil && client.streamProcessor.Initialized()
-}
-
-func (client *LDClient) Close() {
-	client.eventProcessor.close()
-}
-
-func (client *LDClient) Flush() {
-	client.eventProcessor.flush()
-}
-
-func (client *LDClient) GetFlag(key string, user User, defaultVal bool) (bool, error) {
-	return client.Toggle(key, user, defaultVal)
 }
 
 func (client *LDClient) makeRequest(key string) (*Feature, error) {
@@ -436,11 +292,11 @@ func (client *LDClient) evaluate(key string, user User, defaultVal interface{}) 
 		return defaultVal, nil
 	}
 
-	if client.config.Stream && client.streamProcessor != nil && client.streamProcessor.Initialized() {
+	if client.IsStreamInitialized() {
 		var featurePtr *Feature
 		featurePtr, streamErr = client.streamProcessor.GetFeature(key)
 
-		if client.streamProcessor.ShouldFallbackUpdate() {
+		if !client.config.UseLdd && client.IsStreamDisconnected() {
 			go func() {
 				if feature, err := client.makeRequest(key); err != nil {
 					client.config.Logger.Printf("Failed to update feature in fallback mode. Flag values may be stale.")
@@ -475,62 +331,4 @@ func (client *LDClient) evaluate(key string, user User, defaultVal interface{}) 
 	}
 
 	return value, nil
-}
-
-func (client *LDClient) Toggle(key string, user User, defaultVal bool) (bool, error) {
-	value, err := client.evaluate(key, user, defaultVal)
-
-	if err != nil {
-		client.sendFlagRequestEvent(key, user, defaultVal)
-		return defaultVal, err
-	}
-
-	result, ok := value.(bool)
-
-	if !ok {
-		client.sendFlagRequestEvent(key, user, defaultVal)
-		return defaultVal, errors.New("Feature flag returned non-bool value")
-	}
-
-	client.sendFlagRequestEvent(key, user, value)
-	return result, nil
-}
-
-func (client *LDClient) IntVariation(key string, user User, defaultVal int) (int, error) {
-	value, err := client.evaluate(key, user, float64(defaultVal))
-
-	if err != nil {
-		client.sendFlagRequestEvent(key, user, defaultVal)
-		return defaultVal, err
-	}
-
-	// json numbers are deserialized into float64s
-	result, ok := value.(float64)
-
-	if !ok {
-		client.sendFlagRequestEvent(key, user, defaultVal)
-		return defaultVal, errors.New("Feature flag returned non-numeric value")
-	}
-
-	client.sendFlagRequestEvent(key, user, value)
-	return int(result), nil
-}
-
-func (client *LDClient) Float64Variation(key string, user User, defaultVal float64) (float64, error) {
-	value, err := client.evaluate(key, user, defaultVal)
-
-	if err != nil {
-		client.sendFlagRequestEvent(key, user, defaultVal)
-		return defaultVal, err
-	}
-
-	result, ok := value.(float64)
-
-	if !ok {
-		client.sendFlagRequestEvent(key, user, defaultVal)
-		return defaultVal, errors.New("Feature flag returned non-numeric value")
-	}
-
-	client.sendFlagRequestEvent(key, user, value)
-	return result, nil
 }
