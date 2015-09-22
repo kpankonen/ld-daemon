@@ -20,6 +20,8 @@ type Config struct {
 		ApiKey      string
 		Prefix      string
 		ExitOnError bool
+		StreamUri   string
+		BaseUri     string
 	}
 }
 
@@ -40,6 +42,8 @@ func main() {
 	clientConfig := ld.DefaultConfig
 	clientConfig.Stream = true
 	clientConfig.FeatureStore = ldr.NewRedisFeatureStore(c.Redis.Host, c.Redis.Port, c.Main.Prefix)
+	clientConfig.StreamUri = c.Main.StreamUri
+	clientConfig.BaseUri = c.Main.BaseUri
 
 	client = ld.MakeCustomClient(c.Main.ApiKey, clientConfig)
 
