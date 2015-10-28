@@ -53,7 +53,7 @@ var DefaultConfig = Config{
 	FlushInterval: 5 * time.Second,
 	Logger:        log.New(os.Stderr, "[LaunchDarkly]", log.LstdFlags),
 	Timeout:       3000 * time.Millisecond,
-	Stream:        false,
+	Stream:        true,
 	FeatureStore:  nil,
 	UseLdd:        false,
 }
@@ -132,6 +132,14 @@ func (client *LDClient) SetOnline() {
 // Returns whether the LaunchDarkly client is in offline mode.
 func (client *LDClient) IsOffline() bool {
 	return client.offline
+}
+
+// Eagerly initializes the stream connection. If InitializeStream is not called, the stream will
+// be initialized lazily with the first call to Toggle.
+func (client *LDClient) InitializeStream() {
+	if client.config.Stream {
+		client.streamProcessor.StartOnce()
+	}
 }
 
 // Returns false if the LaunchDarkly client does not have an active connection to
@@ -317,6 +325,7 @@ func (client *LDClient) evaluate(key string, user User, defaultVal interface{}) 
 			return defaultVal, errors.New("Unknown feature key. Verify that this feature key exists. Returning default value.")
 		}
 	} else {
+		client.InitializeStream()
 		if featurePtr, reqErr := client.makeRequest(key); reqErr != nil {
 			return defaultVal, reqErr
 		} else {
