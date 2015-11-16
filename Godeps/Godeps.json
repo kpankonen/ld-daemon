@@ -1,11 +1,7 @@
 {
-	"ImportPath": "github.com/launchdarkly/daemon",
-	"GoVersion": "go1.4.2",
+	"ImportPath": "github.com/launchdarkly/ldd",
+	"GoVersion": "go1.5.1",
 	"Deps": [
-		{
-			"ImportPath": "code.google.com/p/gcfg",
-			"Rev": "c2d3050044d05357eaf6c3547249ba57c5e235cb"
-		},
 		{
 			"ImportPath": "github.com/facebookgo/httpcontrol",
 			"Rev": "ccde4420e1fee9af5da365cb76075b95683f39a6"
@@ -29,6 +25,10 @@
 		{
 			"ImportPath": "github.com/launchdarkly/go-client",
 			"Rev": "88b2baadecaa33768f648149bab0aab55276827f"
+		},
+		{
+			"ImportPath": "gopkg.in/gcfg.v1",
+			"Rev": "a3bc0742e3bbfd16123e6cee742cadec9a3301d2"
 		}
 	]
 }

@@ -1,10 +1,10 @@
 package main
 
 import (
-	"code.google.com/p/gcfg"
 	"fmt"
 	ld "github.com/launchdarkly/go-client"
 	ldr "github.com/launchdarkly/go-client/redis"
+	"gopkg.in/gcfg.v1"
 	"os"
 	"time"
 )
