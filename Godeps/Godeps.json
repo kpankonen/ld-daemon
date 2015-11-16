@@ -24,7 +24,7 @@
 		},
 		{
 			"ImportPath": "github.com/launchdarkly/go-client",
-			"Rev": "88b2baadecaa33768f648149bab0aab55276827f"
+			"Rev": "067fb5bcbbbafa0a936adca853f95a6c8b0b4da3"
 		},
 		{
 			"ImportPath": "gopkg.in/gcfg.v1",

@@ -46,6 +46,7 @@ func main() {
 	clientConfig.BaseUri = c.Main.BaseUri
 
 	client = ld.MakeCustomClient(c.Main.ApiKey, clientConfig)
+	client.InitializeStream()
 
 	init := make(chan bool)
 
