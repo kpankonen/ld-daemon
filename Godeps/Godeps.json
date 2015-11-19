@@ -1,5 +1,5 @@
 {
-	"ImportPath": "github.com/launchdarkly/ldd",
+	"ImportPath": "github.com/launchdarkly/ld-daemon",
 	"GoVersion": "go1.5.1",
 	"Deps": [
 		{
