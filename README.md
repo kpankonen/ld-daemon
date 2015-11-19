@@ -11,7 +11,7 @@ The daemon can be used to offload the task of maintaining a stream and writing t
 Quick setup
 -----------
 
-1. Edit `ld-daemon.conf` to specify your Redis host and port, key prefix, and LaunchDarkly API key.
+1. Copy `ld-daemon.conf` to `/etc/ld-daemon.conf`, and edit to specify your Redis host and port, key prefix, and LaunchDarkly API key.
 
 2. If building from source, have `go` 1.4+ and `godep` installed, and run `godep go build`.
 

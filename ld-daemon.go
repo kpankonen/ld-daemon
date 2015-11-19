@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	ld "github.com/launchdarkly/go-client"
 	ldr "github.com/launchdarkly/go-client/redis"
@@ -25,17 +26,23 @@ type Config struct {
 	}
 }
 
+var configFile string
+
 var client ld.LDClient
 
 func main() {
+	flag.StringVar(&configFile, "config", "/etc/ld-daemon.conf", "configuration file location")
+
+	flag.Parse()
+
 	var c Config
 
-	fmt.Println("Starting LaunchDarkly daemon version " + VERSION)
+	fmt.Printf("Starting LaunchDarkly daemon version %s with config %s\n", VERSION, configFile)
 
-	err := gcfg.ReadFileInto(&c, "ld-daemon.conf")
+	err := gcfg.ReadFileInto(&c, configFile)
 
 	if err != nil {
-		fmt.Println("Failed to read configuration file")
+		fmt.Println("Failed to read configuration file. Exiting.")
 		os.Exit(1)
 	}
 
