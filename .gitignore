@@ -19,7 +19,7 @@ _cgo_export.*
 
 _testmain.go
 
-ldd
+ld-daemon
 
 *.exe
 *.test

@@ -30,9 +30,9 @@ var client ld.LDClient
 func main() {
 	var c Config
 
-	fmt.Println("Starting ldd version " + VERSION)
+	fmt.Println("Starting LaunchDarkly daemon version " + VERSION)
 
-	err := gcfg.ReadFileInto(&c, "ldd.conf")
+	err := gcfg.ReadFileInto(&c, "ld-daemon.conf")
 
 	if err != nil {
 		fmt.Println("Failed to read configuration file")
