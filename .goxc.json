@@ -1,11 +1,25 @@
 {
+	"PackageVersion": "1.0.0",
 	"ArtifactsDest": "./pkg",
 	"Tasks": [
 		"xc",
-		"archive-tar-gz"
+		"archive-tar-gz",
+		"deb"
 	],
+	"TaskSettings":{
+		"deb": {
+			"metadata": {
+				"maintainer": "LaunchDarkly",
+				"maintainer-email": "team@launchdarkly.com",
+				"description": "LaunchDarkly Redis Daemon"
+			},
+			"other-mapped-files": {
+				"/": "deb-contents/"
+			}
+		}
+	},
   "BuildConstraints": "linux,!arm",
-	"ResourcesInclude": "ldd.conf",
+	"ResourcesInclude": "ld-daemon.conf",
 	"ConfigVersion": "0.9",
 	"Env": [
 		"GOPATH={{.Env.PWD}}{{.PS}}Godeps{{.PS}}_workspace{{.PLS}}{{.Env.GOPATH}}"

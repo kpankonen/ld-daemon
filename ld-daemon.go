@@ -37,7 +37,7 @@ func main() {
 
 	var c Config
 
-	fmt.Printf("Starting LaunchDarkly daemon version %s with config %s\n", VERSION, configFile)
+	fmt.Printf("Starting LaunchDarkly daemon version %s with configuration file %s\n", VERSION, configFile)
 
 	err := gcfg.ReadFileInto(&c, configFile)
 

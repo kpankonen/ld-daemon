@@ -26,3 +26,4 @@ ld-daemon
 *.prof
 
 pkg
+_out
