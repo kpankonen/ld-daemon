@@ -7,6 +7,7 @@ import (
 	ldr "github.com/launchdarkly/go-client/redis"
 	"gopkg.in/gcfg.v1"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -37,7 +38,7 @@ func main() {
 
 	var c Config
 
-	fmt.Printf("Starting LaunchDarkly daemon version %s with configuration file %s\n", VERSION, configFile)
+	fmt.Printf("Starting LaunchDarkly daemon version %s with configuration file %s\n", formatVersion(VERSION), configFile)
 
 	err := gcfg.ReadFileInto(&c, configFile)
 
@@ -90,4 +91,13 @@ loop:
 		}
 	}
 
+}
+
+func formatVersion(version string) string {
+	split := strings.Split(version, "+")
+
+	if len(split) == 2 {
+		return fmt.Sprintf("%s (build %s)", split[0], split[1])
+	}
+	return version
 }

@@ -5,7 +5,7 @@ if [ -z "$CIRCLE_ARTIFACTS" ]; then
 else
   DEST="${CIRCLE_ARTIFACTS}"
 fi
-goxc -wd=. -build-ldflags="-X main.Version ${REV}" -d=${DEST}
+goxc -wd=. -bu="${REV}" -d=${DEST}
 
 if [ ! -z "$CIRCLE_ARTIFACTS" ]; then
 	cp -r $CIRCLE_ARTIFACTS ./pkg

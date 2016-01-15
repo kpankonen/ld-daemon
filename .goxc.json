@@ -18,7 +18,7 @@
 			}
 		}
 	},
-  "BuildConstraints": "linux,!arm",
+  "BuildConstraints": "linux,!arm darwin",
 	"ResourcesInclude": "ld-daemon.conf",
 	"ConfigVersion": "0.9",
 	"Env": [
