@@ -2,7 +2,7 @@ Package: ld-daemon
 Priority: extra
 Maintainer: LaunchDarkly <team@launchdarkly.com>
 Section: devel
-Version: 1.0.1
+Version: 1.0.2
 Architecture: any
 Description: LaunchDarkly Redis Daemon
 Source: ld-daemon

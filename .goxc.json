@@ -1,5 +1,5 @@
 {
-	"PackageVersion": "1.0.1",
+	"PackageVersion": "1.0.2",
 	"ArtifactsDest": "./pkg",
 	"Tasks": [
 		"xc",
