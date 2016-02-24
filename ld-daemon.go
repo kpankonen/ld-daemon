@@ -38,7 +38,7 @@ var configFile string
 var client *ld.LDClient
 
 func exists(file string) bool {
-	if _, err := os.Stat("/path/to/whatever"); err == nil {
+	if _, err := os.Stat(file); err == nil {
 		return true
 	}
 	return false
