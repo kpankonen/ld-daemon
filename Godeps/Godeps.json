@@ -1,6 +1,6 @@
 {
-	"ImportPath": "github.com/launchdarkly/ld-daemon",
-	"GoVersion": "go1.5.1",
+	"ImportPath": "github.com/launchdarkly/ldd",
+	"GoVersion": "go1.4",
 	"Deps": [
 		{
 			"ImportPath": "github.com/facebookgo/httpcontrol",
@@ -8,23 +8,37 @@
 		},
 		{
 			"ImportPath": "github.com/garyburd/redigo/internal",
-			"Rev": "535138d7bcd717d6531c701ef5933d98b1866257"
+			"Rev": "836b6e58b3358112c8291565d01c35b8764070d7"
 		},
 		{
 			"ImportPath": "github.com/garyburd/redigo/redis",
-			"Rev": "535138d7bcd717d6531c701ef5933d98b1866257"
+			"Rev": "836b6e58b3358112c8291565d01c35b8764070d7"
 		},
 		{
 			"ImportPath": "github.com/gregjones/httpcache",
 			"Rev": "4fb00a8eec008ffa8ac9ec46a93684dcbb62fc09"
 		},
 		{
+			"ImportPath": "github.com/imdario/mergo",
+			"Comment": "0.2.0-5-g61a5285",
+			"Rev": "61a52852277811e93e06d28e0d0c396284a7730b"
+		},
+		{
+			"ImportPath": "github.com/kelseyhightower/envconfig",
+			"Comment": "v1.0.0-26-g12c18e8",
+			"Rev": "12c18e8343f6eb5fc3a9d5c8dc353e42e6bb40b9"
+		},
+		{
 			"ImportPath": "github.com/launchdarkly/eventsource",
-			"Rev": "e88deb7f4409208dc3d97cd1e7d990c3145f1ca3"
+			"Rev": "7a80b789e2ea45aa2f320c59203c306e8ded8f06"
 		},
 		{
 			"ImportPath": "github.com/launchdarkly/go-client",
-			"Rev": "c198e12a811226bedd1ca55cd20ec1f7979894df"
+			"Rev": "166834c14f6b1265e5feeff5c8266fffb145d99d"
+		},
+		{
+			"ImportPath": "github.com/patrickmn/go-cache",
+			"Rev": "1881a9bccb818787f68c52bfba648c6cf34c34fa"
 		},
 		{
 			"ImportPath": "gopkg.in/gcfg.v1",

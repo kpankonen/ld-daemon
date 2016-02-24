@@ -1,0 +1,1 @@
+worker: ./ld-daemon
