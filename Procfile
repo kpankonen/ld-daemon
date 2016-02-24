@@ -1,1 +1,1 @@
-worker: ./ld-daemon
+worker: ld-daemon
