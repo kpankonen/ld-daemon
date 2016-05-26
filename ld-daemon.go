@@ -13,23 +13,25 @@ import (
 
 var VERSION = "DEV"
 
+type EnvConfig struct {
+	ApiKey string
+	Prefix string
+}
+
 type Config struct {
 	Redis struct {
 		Host string
 		Port int
 	}
 	Main struct {
-		ApiKey      string
-		Prefix      string
 		ExitOnError bool
 		StreamUri   string
 		BaseUri     string
 	}
+	Environment map[string]*EnvConfig
 }
 
 var configFile string
-
-var client ld.LDClient
 
 func main() {
 	flag.StringVar(&configFile, "config", "/etc/ld-daemon.conf", "configuration file location")
@@ -47,50 +49,36 @@ func main() {
 		os.Exit(1)
 	}
 
-	clientConfig := ld.DefaultConfig
-	clientConfig.Stream = true
-	clientConfig.FeatureStore = ldr.NewRedisFeatureStore(c.Redis.Host, c.Redis.Port, c.Main.Prefix)
-	clientConfig.StreamUri = c.Main.StreamUri
-	clientConfig.BaseUri = c.Main.BaseUri
+	for envName, envConfig := range c.Environment {
+		go func(envName string, envConfig EnvConfig) {
+			clientConfig := ld.DefaultConfig
+			clientConfig.Stream = true
+			clientConfig.FeatureStore = ldr.NewRedisFeatureStore(c.Redis.Host, c.Redis.Port, envConfig.Prefix, 10*time.Second)
+			clientConfig.StreamUri = c.Main.StreamUri
+			clientConfig.BaseUri = c.Main.BaseUri
 
-	client = ld.MakeCustomClient(c.Main.ApiKey, clientConfig)
-	client.InitializeStream()
+			_, err := ld.MakeCustomClient(envConfig.ApiKey, clientConfig, time.Second*10)
 
-	init := make(chan bool)
+			if err != nil {
+				fmt.Printf("Error initializing LaunchDarkly client for %s: %+v\n", envName, err)
 
-	go func() {
-		for {
-			if client.IsStreamInitialized() {
-				init <- true
-				break
+				if c.Main.ExitOnError {
+					os.Exit(1)
+				}
+			} else {
+				fmt.Printf("Initialized LaunchDarkly client for %s\n", envName)
 			}
-		}
-	}()
-
-loop:
-	for {
-		select {
-		case <-init:
-			fmt.Println("Initialized stream")
-			break loop
-		case <-time.After(time.Second * 10):
-			fmt.Println("Timed out connecting to stream")
-			if c.Main.ExitOnError {
-				os.Exit(1)
-			}
-		}
+		}(envName, *envConfig)
 	}
 
+	go forever()
+	select {} // block forever
+}
+
+func forever() {
 	for {
 		time.Sleep(time.Second)
-		if client.IsStreamDisconnected() {
-			fmt.Println("Stream connection lost")
-			if c.Main.ExitOnError {
-				os.Exit(1)
-			}
-		}
 	}
-
 }
 
 func formatVersion(version string) string {
