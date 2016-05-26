@@ -27,6 +27,10 @@
 			"Rev": "9c6dda921e8ccff68303be9fa4b29375bb060070"
 		},
 		{
+			"ImportPath": "github.com/patrickmn/go-cache",
+			"Rev": "1881a9bccb818787f68c52bfba648c6cf34c34fa"
+		},
+		{
 			"ImportPath": "gopkg.in/gcfg.v1",
 			"Rev": "a3bc0742e3bbfd16123e6cee742cadec9a3301d2"
 		}
